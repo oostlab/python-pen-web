@@ -1,0 +1,4 @@
+.DS_Store
+bruteforce/__pycache__
+auth-scripts/__pycache__/
+bruteforce/.vscode
